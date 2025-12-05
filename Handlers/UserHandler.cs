@@ -103,7 +103,7 @@ namespace LTAS_User_Management.Handlers
             }
         }
 
-        public async Task<List<LoginProfileValidation>> ValidateUsersLoginProfilesAsync(List<Users> users)
+        public async Task<List<LoginProfileValidation>> ValidateUsersLoginProfilesAsync(List<Users> users, IInstanceSettingsBundle _instanceSettingsBundle)
         {
             var results = new List<LoginProfileValidation>();
             foreach (var user in users)
@@ -281,110 +281,21 @@ namespace LTAS_User_Management.Handlers
                     _ltasHelper.Logger.LogError(ex, $"Failed to check login profile for user: {user.ArtifactId}");
                 }
             }
+            _ltasLogger.LogInformation($"Found {results?.Count ?? 0} quinn users with login method issues");
+
+            if (results?.Count > 0)
+            {
+                string message = "The following quinn users have some form of problem with the login method on their accounts, these need to reviewed and resolved.";
+                var emailbody = MessageHandler.EmailBody.LoginValidationEmailBody(results, message).ToString();
+                await MessageHandler.Email.SendInternalNotificationAsync(
+                    _instanceSettingsBundle,
+                    emailbody,
+                    "Quinn Users With Invalid Login Method");
+            }
             return results;
         }
 
-        //TODO: Remove
-        //public async Task<List<LoginProfileValidation>> ValidateUsersLoginProfilesAsync(List<Users> users)
-        //{
-        //    var results = new List<LoginProfileValidation>();
-
-        //    foreach (var user in users)
-        //    {
-        //        try
-        //        {                    
-        //            var result = new LoginProfileValidation
-        //            {
-        //                UserArtifactId = user.ArtifactId,
-        //                EmailAddress = user.EmailAddress,
-        //                FirstName = user.FirstName,
-        //                LastName = user.LastName
-        //            };
-
-        //            var servicesManager = _helper.GetServicesManager();
-        //            using (var loginProfileManager = servicesManager.CreateProxy<ILoginProfileManager>(ExecutionIdentity.System))
-        //            {
-        //                var profile = await loginProfileManager.GetLoginProfileAsync(user.ArtifactId);
-
-        //                // Track all authentication methods
-        //                if (profile.Password != null)
-        //                    result.InvalidProviderTypes.Add("Password");
-        //                if (profile.IntegratedAuthentication != null)
-        //                    result.InvalidProviderTypes.Add("IntegratedAuthentication");
-        //                if (profile.ActiveDirectory != null)
-        //                    result.InvalidProviderTypes.Add("ActiveDirectory");
-        //                if (profile.ClientCertificate != null)
-        //                    result.InvalidProviderTypes.Add("ClientCertificate");
-        //                if (profile.RSA != null)
-        //                    result.InvalidProviderTypes.Add("RSA");
-
-        //                // Count valid providers
-        //                var validOpenIDCount = profile.OpenIDConnectMethods?
-        //                    .Count(x => x.ProviderName.IndexOf("okta", StringComparison.OrdinalIgnoreCase) >=0 && x.IsEnabled);
-        //                var validSAML2Count = profile.SAML2Methods?
-        //                    .Count(x => x.ProviderName.IndexOf("okta", StringComparison.OrdinalIgnoreCase) >= 0 && x.IsEnabled);
-
-        //                // Track invalid providers
-        //                if (profile.OpenIDConnectMethods != null)
-        //                {
-        //                    foreach (var method in profile.OpenIDConnectMethods)
-        //                    {
-        //                        if (method.ProviderName.IndexOf("okta", StringComparison.OrdinalIgnoreCase) < 0)
-        //                            result.InvalidProviderTypes.Add($"OpenIDConnect: {method.ProviderName}");
-        //                    }
-        //                }
-
-        //                if (profile.SAML2Methods != null)
-        //                {
-        //                    foreach (var method in profile.SAML2Methods)
-        //                    {
-        //                        if (method.ProviderName.IndexOf("okta", StringComparison.OrdinalIgnoreCase) < 0)
-        //                            result.InvalidProviderTypes.Add($"SAML2: {method.ProviderName}");
-        //                    }
-        //                }
-
-        //                // Calculate total active methods
-        //                var totalValidProviders = (validOpenIDCount ?? 0) + (validSAML2Count ?? 0);
-        //                var totalActiveProviders = totalValidProviders + result.InvalidProviderTypes.Count;
-
-        //                // Set validation flags
-        //                result.HasMultipleProviders = totalActiveProviders > 1;
-        //                result.HasNoValidProvider = totalValidProviders == 0;
-        //                result.IsValid = !result.HasMultipleProviders && !result.HasNoValidProvider;
-
-        //                // Create validation message
-        //                if (result.HasMultipleProviders)
-        //                {
-        //                    result.ValidationMessage = $"Has multiple providers: {string.Join(", ", result.InvalidProviderTypes)}";
-        //                }
-        //                else if (result.HasNoValidProvider)
-        //                {
-        //                    result.ValidationMessage = "No valid Okta or OktaAdmin provider found";
-        //                }
-
-        //                // Log findings
-        //                //_ltasLogger.LogInformation($"User {user.ArtifactId} validation results:");
-        //                //_ltasLogger.LogInformation($"- Has multiple providers: {result.HasMultipleProviders}");
-        //                //_ltasLogger.LogInformation($"- Has no valid provider: {result.HasNoValidProvider}");
-        //                //_ltasLogger.LogInformation($"- Invalid providers: {string.Join(", ", result.InvalidProviderTypes)}");
-
-        //                // Only add to results if there are issues
-        //                if (!result.IsValid)
-        //                {
-        //                    results.Add(result);
-        //                }
-        //            }
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            _ltasLogger.LogError(ex, $"Failed to check login profile for user: {user.ArtifactId}");
-        //            _ltasHelper.Logger.LogError(ex, $"Failed to check login profile for user: {user.ArtifactId}");
-        //        }
-        //    }
-
-        //    return results;
-        //}
-
+        
         public async Task<List<PasswordAuthValidation>> ValidatePasswordAndTwoFactorAsync(List<Users> users)
         {
             var results = new List<PasswordAuthValidation>();
