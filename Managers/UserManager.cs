@@ -58,18 +58,8 @@ public class UserManager
 
             if (quinnUsers?.Count > 0)
             {
-                var quinnUsersWithLoginIssues = await _userHandler.ValidateUsersLoginProfilesAsync(quinnUsers);
-                _ltasLogger.LogInformation($"Found {quinnUsersWithLoginIssues?.Count ?? 0} quinn users with login method issues");
-
-                if (quinnUsersWithLoginIssues?.Count > 0)
-                {
-                    string message = "The following quinn users have some form of problem with the login method on their accounts, these need to reviewed and resolved.";
-                    var emailbody = MessageHandler.EmailBody.LoginValidationEmailBody(quinnUsersWithLoginIssues, message).ToString();
-                    await MessageHandler.Email.SendInternalNotificationAsync(
-                        _instanceSettingsBundle,
-                        emailbody,
-                        "Quinn Users With Invalid Login Method");
-                }
+                var quinnUsersWithLoginIssues = await _userHandler.ValidateUsersLoginProfilesAsync(quinnUsers, _instanceSettingsBundle);
+                //TODO: add in cilent update for QE users and system admin update
             }
 
             var nonQuinnUsers = _dataHandler.NonQuinnUsers();
