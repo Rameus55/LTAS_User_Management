@@ -59,7 +59,10 @@ public class UserManager
             if (quinnUsers?.Count > 0)
             {
                 var quinnUsersWithLoginIssues = await _userHandler.ValidateUsersLoginProfilesAsync(quinnUsers, _instanceSettingsBundle);
-                //TODO: add in cilent update for QE users and system admin update
+                var usersWithClientIssues = await _userHandler.ValidateUsersClientAsync(quinnUsers, _instanceSettingsBundle); 
+                await _userHandler.UpdateUsersToNewClientAsync(usersWithClientIssues);
+                //Finished: added cilent update for QE users
+                //TODO: system admin update
             }
 
             var nonQuinnUsers = _dataHandler.NonQuinnUsers();

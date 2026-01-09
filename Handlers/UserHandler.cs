@@ -1,14 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using LTAS_User_Management.Logging;
+﻿using LTAS_User_Management.Logging;
 using LTAS_User_Management.Models;
 using LTAS_User_Management.Utilities;
 using Relativity.API;
 using Relativity.Identity.V1.Services;
 using Relativity.Identity.V1.Shared;
 using Relativity.Identity.V1.UserModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using static LTAS_User_Management.Handlers.MessageHandler;
 
 namespace LTAS_User_Management.Handlers
 {
@@ -370,20 +371,35 @@ namespace LTAS_User_Management.Handlers
             return results;
         }
 
-        public async Task<List<UserClientValidation>> ValidateUsersClientAsync(List<Users> users, int targetClientId = 1020443)
+        public async Task<List<UserClientValidation>> ValidateUsersClientAsync(List<Users> users, IInstanceSettingsBundle instanceSettingsBundle)
         {
+            var singleSettingValueEnvironment = instanceSettingsBundle.GetStringAsync("Relativity.Core", "RelativityInstanceURL");
+            string smtpEnvironmentValue = singleSettingValueEnvironment.Result.Split('-')[1].Split('.')[0].ToUpper();
             var results = new List<UserClientValidation>();
+            int targetClientId;
+            //finds the environment that the user is in and their client ID
+            switch (smtpEnvironmentValue)
+            {
+                case ("US"):
+                    targetClientId = 1348948;
+                    break;
 
-            foreach (var user in users)
+                case ("EU"):
+                    targetClientId = 1067216;
+                    break;
+
+                case ("AU"):
+                    targetClientId = 1304327;
+                    break;
+            }
+                foreach (var user in users)
             {
                 try
                 {                   
                     var result = new UserClientValidation
                     {
                         UserArtifactId = user.ArtifactId,
-                        EmailAddress = user.EmailAddress,
-                        FirstName = user.FirstName,
-                        LastName = user.LastName
+                        ClientArtifactId = targetClientId
                     };
 
                     var servicesManager = _helper.GetServicesManager();
@@ -395,12 +411,11 @@ namespace LTAS_User_Management.Handlers
 
                             if (response.Client?.Value != null && !response.Client.Secured)
                             {
-                                result.ClientName = response.Client.Value.Name ?? "Unnamed Client";
                                 result.ClientArtifactId = response.Client.Value.ArtifactID;
 
                                 // Only add users with the target client ID
-                                if (result.ClientArtifactId == targetClientId)
-                                {                 
+                                if (result.ClientArtifactId != targetClientId)
+                                {
                                     results.Add(result);
                                 }
                             }
@@ -423,7 +438,7 @@ namespace LTAS_User_Management.Handlers
             return results;
         }
 
-        public async Task UpdateUsersToNewClientAsync(List<Users> users, int newClientId)
+        public async Task UpdateUsersToNewClientAsync(List<UserClientValidation> users)
         {
             try
             {               
@@ -434,24 +449,24 @@ namespace LTAS_User_Management.Handlers
                         var servicesManager = _helper.GetServicesManager();
                         using (var userManager = servicesManager.CreateProxy<IUserManager>(ExecutionIdentity.System))
                         {
-                            var userResponse = await userManager.ReadAsync(user.ArtifactId);
+                            var userResponse = await userManager.ReadAsync(user.UserArtifactId);
                             var userRequest = new UserRequest(userResponse)
                             {
                                 Client = new Securable<ObjectIdentifier>
                                 {
-                                    Value = new ObjectIdentifier { ArtifactID = newClientId },
+                                    Value = new ObjectIdentifier { ArtifactID = user.ClientArtifactId},
                                     Secured = false
                                 }
                             };
 
-                            await userManager.UpdateAsync(user.ArtifactId, userRequest);
-                            _ltasLogger.LogInformation($"Successfully updated client for user: {user.ArtifactId} ({user.EmailAddress}) to {newClientId}");
+                            await userManager.UpdateAsync(user.UserArtifactId, userRequest);
+                            _ltasLogger.LogInformation($"Successfully updated client for user: {user.UserArtifactId} ({userResponse.EmailAddress}) to {user.ClientArtifactId}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        _ltasLogger.LogError(ex, $"Failed to update client for user: {user.ArtifactId} ({user.EmailAddress})");
-                        _ltasHelper.Logger.LogError(ex, $"Failed to update client for user: {user.ArtifactId}");
+                        _ltasLogger.LogError(ex, $"Failed to update client for user: {user.UserArtifactId}");
+                        _ltasHelper.Logger.LogError(ex, $"Failed to update client for user: {user.UserArtifactId}");
                     }
                 }
                 _ltasLogger.LogInformation($"Completed client update process");
