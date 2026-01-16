@@ -5,6 +5,7 @@ using Relativity.API;
 using Relativity.Identity.V1.Services;
 using Relativity.Identity.V1.Shared;
 using Relativity.Identity.V1.UserModels;
+using Relativity.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -374,14 +375,16 @@ namespace LTAS_User_Management.Handlers
         public async Task<List<UserClientValidation>> ValidateUsersClientAsync(List<Users> users, IInstanceSettingsBundle instanceSettingsBundle)
         {
             var singleSettingValueEnvironment = instanceSettingsBundle.GetStringAsync("Relativity.Core", "RelativityInstanceURL");
-            string smtpEnvironmentValue = singleSettingValueEnvironment.Result.Split('-')[1].Split('.')[0].ToUpper();
+            string environmentValue = singleSettingValueEnvironment.Result.Split('-')[1].Split('.')[0].ToUpper();
+            _ltasLogger.LogDebug($"Environment Variable:{environmentValue}");
             var results = new List<UserClientValidation>();
-            int targetClientId;
+            int targetClientId = 0;
             //finds the environment that the user is in and their client ID
-            switch (smtpEnvironmentValue)
+            switch (environmentValue)
             {
                 case ("US"):
                     targetClientId = 1348948;
+                    _ltasLogger.LogDebug($"US Client Id has been hit -  {targetClientId}");
                     break;
 
                 case ("EU"):
@@ -411,12 +414,14 @@ namespace LTAS_User_Management.Handlers
 
                             if (response.Client?.Value != null && !response.Client.Secured)
                             {
-                                result.ClientArtifactId = response.Client.Value.ArtifactID;
+
+                                int currentClientId = response.Client.Value.ArtifactID;
 
                                 // Only add users with the target client ID
-                                if (result.ClientArtifactId != targetClientId)
+                                if (currentClientId != targetClientId)
                                 {
                                     results.Add(result);
+                                    _ltasLogger.LogDebug($"User: {result.UserArtifactId}, Target Client Id:{result.ClientArtifactId}, Variable Client Id: {targetClientId}");
                                 }
                             }
                         }
@@ -433,7 +438,7 @@ namespace LTAS_User_Management.Handlers
                 }
             }
 
-            _ltasLogger.LogInformation($"Found {results.Count} users to update from client ID {targetClientId}");
+            _ltasLogger.LogInformation($"Found {results.Count} users to update to client ID {targetClientId}");
 
             return results;
         }
@@ -443,7 +448,7 @@ namespace LTAS_User_Management.Handlers
             try
             {               
                 foreach (var user in users)
-                {
+                {                   
                     try
                     {
                         var servicesManager = _helper.GetServicesManager();
