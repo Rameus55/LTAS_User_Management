@@ -55,6 +55,29 @@ namespace LTAS_User_Management.Handlers
                 _ltasHelper.Logger.LogError(ex, $"Failed to disable user: {userArtifactId}");
             }
         }
+        public async Task AdminUpdateAsync(int userArtifactId)
+        {
+            try
+            {
+                UserResponse userResponse = await _userManager.ReadAsync(userArtifactId);
+                
+                if(userResponse.Keywords != "Do Not Bill")
+                {
+                    _ltasLogger.LogInformation($"Updating this admin user's keyword: {userArtifactId}");
+                    UserRequest userRequest = new UserRequest(userResponse)
+                    {
+                        Keywords = "Do Not Bill"
+                    };
+                    await _userManager.UpdateAsync(userArtifactId, userRequest);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                _ltasLogger.LogError(ex, $"Failed to update admin user: {userArtifactId}");
+                _ltasHelper.Logger.LogError(ex, $"Failed to update admin user: {userArtifactId}");
+            }
+        }
 
         public async Task UpdateItemListUserAsync(int userArtifactId)
         {
@@ -149,6 +172,7 @@ namespace LTAS_User_Management.Handlers
                                  groupName.Equals("QE_LTAS_ADMIN", StringComparison.OrdinalIgnoreCase)))
                             {
                                 isAdmin = true;
+                                await AdminUpdateAsync(user.ArtifactId);
                                 break;
                             }
                         }
