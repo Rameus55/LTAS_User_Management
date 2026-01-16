@@ -413,9 +413,7 @@ namespace LTAS_User_Management.Handlers
 
                             if (response.Client?.Value != null && !response.Client.Secured)
                             {
-
                                 int currentClientId = response.Client.Value.ArtifactID;
-
                                 // Only add users with the target client ID
                                 if (currentClientId != targetClientId)
                                 {
