@@ -376,15 +376,14 @@ namespace LTAS_User_Management.Handlers
         {
             var singleSettingValueEnvironment = instanceSettingsBundle.GetStringAsync("Relativity.Core", "RelativityInstanceURL");
             string environmentValue = singleSettingValueEnvironment.Result.Split('-')[1].Split('.')[0].ToUpper();
-            _ltasLogger.LogDebug($"Environment Variable:{environmentValue}");
+            
             var results = new List<UserClientValidation>();
             int targetClientId = 0;
             //finds the environment that the user is in and their client ID
             switch (environmentValue)
             {
                 case ("US"):
-                    targetClientId = 1348948;
-                    _ltasLogger.LogDebug($"US Client Id has been hit -  {targetClientId}");
+                    targetClientId = 1348948;                    
                     break;
 
                 case ("EU"):
@@ -420,8 +419,7 @@ namespace LTAS_User_Management.Handlers
                                 // Only add users with the target client ID
                                 if (currentClientId != targetClientId)
                                 {
-                                    results.Add(result);
-                                    _ltasLogger.LogDebug($"User: {result.UserArtifactId}, Target Client Id:{result.ClientArtifactId}, Variable Client Id: {targetClientId}");
+                                    results.Add(result);                                    
                                 }
                             }
                         }
