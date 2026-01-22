@@ -140,7 +140,8 @@ namespace LTAS_User_Management.Handlers
                                 WHERE   u.EmailAddress NOT LIKE '%@kcura.com'
                                     AND u.EmailAddress NOT LIKE '%@PreviewUser.com'
                                     AND u.EmailAddress NOT LIKE '%@relativity.com'
-                                    AND u.EmailAddress NOT LIKE '%@quinnemanuel.com'";
+                                    AND u.EmailAddress NOT LIKE '%@quinnemanuel.com'
+                                    AND u.RelativityAccess = 1";
 
                 var dt = _eddsDbContext.ExecuteSqlStatementAsDataTable(sql);
 

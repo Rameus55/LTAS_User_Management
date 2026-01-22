@@ -37,17 +37,15 @@ namespace LTAS_User_Management.Handlers
         {
             try
             {
-                _ltasLogger.LogInformation($"Starting to disable user: {userArtifactId}");                
-
+                _ltasLogger.LogInformation($"Starting to disable user: {userArtifactId}");
                 UserResponse userResponse = await _userManager.ReadAsync(userArtifactId);
                 UserRequest userRequest = new UserRequest(userResponse)
                 {
                     Notes = "user had no active groups",
                     Keywords = "disabled by LTAS User Management system",
-                    RelativityAccess = false,                  
+                    RelativityAccess = false,
                 };
-
-                await _userManager.UpdateAsync(userArtifactId, userRequest);                
+                await _userManager.UpdateAsync(userArtifactId, userRequest);
             }
             catch (Exception ex)
             {
@@ -55,43 +53,44 @@ namespace LTAS_User_Management.Handlers
                 _ltasHelper.Logger.LogError(ex, $"Failed to disable user: {userArtifactId}");
             }
         }
-        public async Task AdminUpdateAsync(int userArtifactId)
+
+        public async Task<bool> AdminUpdateAsync(int userArtifactId)
         {
             try
             {
                 UserResponse userResponse = await _userManager.ReadAsync(userArtifactId);
-                
-                if(userResponse.Keywords != "Do Not Bill")
+
+                if (userResponse.Keywords != "Do Not Bill")
                 {
-                    _ltasLogger.LogInformation($"Updating this admin user's keyword: {userArtifactId}");
+                    _ltasLogger.LogInformation($"Updating admin user {userArtifactId} keyword to 'Do Not Bill'");
                     UserRequest userRequest = new UserRequest(userResponse)
                     {
                         Keywords = "Do Not Bill"
                     };
                     await _userManager.UpdateAsync(userArtifactId, userRequest);
+                    return true;
                 }
-
+                return false;
             }
             catch (Exception ex)
             {
                 _ltasLogger.LogError(ex, $"Failed to update admin user: {userArtifactId}");
                 _ltasHelper.Logger.LogError(ex, $"Failed to update admin user: {userArtifactId}");
+                return false;
             }
         }
 
         public async Task UpdateItemListUserAsync(int userArtifactId)
         {
             try
-            {                
+            {
                 UserResponse userResponse = await _userManager.ReadAsync(userArtifactId);
                 UserRequest userRequest = new UserRequest(userResponse)
                 {
                     ItemListPageLength = 200
                 };
-
                 await _userManager.UpdateAsync(userArtifactId, userRequest);
                 _ltasLogger.LogInformation($"Updated ItemListPage for user: {userArtifactId}");
-
             }
             catch (Exception ex)
             {
@@ -104,20 +103,15 @@ namespace LTAS_User_Management.Handlers
         {
             try
             {
-                _ltasLogger.LogInformation($"Retrieving groups for user: {userArtifactId}");                
-
                 QueryRequest queryRequest = new QueryRequest
                 {
                     Fields = new FieldRef[]
                     {
-                        new FieldRef { Name = "ArtifactID" }
+                        new FieldRef { Name = "ArtifactID" },
+                        new FieldRef { Name = "Name" }
                     }
                 };
-
                 var result = await _userManager.QueryGroupsByUserAsync(queryRequest, 0, 10000, userArtifactId);
-
-                _ltasLogger.LogInformation($"Successfully retrieved groups for user: {userArtifactId}");                
-
                 return result;
             }
             catch (Exception ex)
@@ -144,29 +138,14 @@ namespace LTAS_User_Management.Handlers
                         InvalidProviderTypes = new List<string>()
                     };
 
-                    // Check if user is in admin groups to determine if they need OktaAdmin
+                    // Check if user is in admin groups
                     bool isAdmin = false;
                     var userGroups = await RetrieveGroupsForUser(user.ArtifactId);
                     if (userGroups != null && userGroups.Objects != null)
                     {
-                        // Check if user belongs to admin groups
                         foreach (var group in userGroups.Objects)
                         {
-                            // Access group name based on how QueryResultSlim returns data
-                            // Adjust this according to how your data structure actually looks
-                            string groupName = null;
-
-                            // Try to get group name through dictionary access if available
-                            if (group is IDictionary<string, object> dict && dict.ContainsKey("Name"))
-                            {
-                                groupName = dict["Name"]?.ToString();
-                            }
-                            // Alternative approach if objects have a different structure
-                            else if (group.GetType().GetProperty("Name") != null)
-                            {
-                                groupName = group.GetType().GetProperty("Name").GetValue(group)?.ToString();
-                            }
-
+                            string groupName = group.Values?.Count > 1 ? group.Values[1]?.ToString() : null;
                             if (groupName != null &&
                                 (groupName.Equals("System Administrators", StringComparison.OrdinalIgnoreCase) ||
                                  groupName.Equals("QE_LTAS_ADMIN", StringComparison.OrdinalIgnoreCase)))
@@ -195,7 +174,7 @@ namespace LTAS_User_Management.Handlers
                         if (profile.RSA != null)
                             result.InvalidProviderTypes.Add("RSA");
 
-                        // Check for valid authentication methods based on user type
+                        // Check for valid authentication methods
                         bool hasOkta = false;
                         bool hasOktaAdmin = false;
 
@@ -208,8 +187,7 @@ namespace LTAS_User_Management.Handlers
 
                                 if (method.ProviderName.IndexOf("okta", StringComparison.OrdinalIgnoreCase) >= 0)
                                 {
-                                    // Check if this is specifically OktaAdmin
-                                    if (method.ProviderName.IndexOf("oktaadmin", StringComparison.OrdinalIgnoreCase) >= 0)
+                                    if (method.ProviderName.Replace(" ", "").IndexOf("oktaadmin", StringComparison.OrdinalIgnoreCase) >= 0)
                                     {
                                         hasOktaAdmin = true;
                                     }
@@ -234,8 +212,7 @@ namespace LTAS_User_Management.Handlers
 
                                 if (method.ProviderName.IndexOf("okta", StringComparison.OrdinalIgnoreCase) >= 0)
                                 {
-                                    // Check if this is specifically OktaAdmin
-                                    if (method.ProviderName.IndexOf("oktaadmin", StringComparison.OrdinalIgnoreCase) >= 0)
+                                    if (method.ProviderName.Replace(" ", "").IndexOf("oktaadmin", StringComparison.OrdinalIgnoreCase) >= 0)
                                     {
                                         hasOktaAdmin = true;
                                     }
@@ -254,23 +231,31 @@ namespace LTAS_User_Management.Handlers
                         // Set validation flags based on requirements
                         if (isAdmin)
                         {
-                            // Admin users must use OktaAdmin
-                            result.IsValid = hasOktaAdmin && !hasOkta && result.InvalidProviderTypes.Count == 0;
-                            result.HasNoValidProvider = !hasOktaAdmin;
+                            // Admin users must use BOTH Okta AND OktaAdmin
+                            result.IsValid = hasOktaAdmin && hasOkta && result.InvalidProviderTypes.Count == 0;
+                            result.HasNoValidProvider = !hasOktaAdmin || !hasOkta;
 
-                            if (!hasOktaAdmin)
+                            if (!hasOktaAdmin && !hasOkta)
                             {
-                                result.ValidationMessage = "System Administrator or QE_LTAS_ADMIN user must use OktaAdmin provider";
+                                result.ValidationMessage = "System Administrator or QE_LTAS_ADMIN user must use both Okta and OktaAdmin providers";
                             }
-                            else if (hasOkta || result.InvalidProviderTypes.Count > 0)
+                            else if (!hasOktaAdmin)
+                            {
+                                result.ValidationMessage = "System Administrator or QE_LTAS_ADMIN user is missing OktaAdmin provider";
+                            }
+                            else if (!hasOkta)
+                            {
+                                result.ValidationMessage = "System Administrator or QE_LTAS_ADMIN user is missing standard Okta provider";
+                            }
+                            else if (result.InvalidProviderTypes.Count > 0)
                             {
                                 result.HasMultipleProviders = true;
-                                result.ValidationMessage = $"Admin user has additional providers: {string.Join(", ", result.InvalidProviderTypes.Concat(hasOkta ? new[] { "Okta (standard)" } : new string[0]))}";
+                                result.ValidationMessage = $"Admin user has additional invalid providers: {string.Join(", ", result.InvalidProviderTypes)}";
                             }
                         }
                         else
                         {
-                            // Regular Quinn users must use standard Okta
+                            // Regular Quinn users must use standard Okta only
                             result.IsValid = hasOkta && !hasOktaAdmin && result.InvalidProviderTypes.Count == 0;
                             result.HasNoValidProvider = !hasOkta;
 
@@ -285,15 +270,6 @@ namespace LTAS_User_Management.Handlers
                             }
                         }
 
-                        // Log findings
-                        _ltasLogger.LogInformation($"User {user.ArtifactId} validation results:");
-                        _ltasLogger.LogInformation($"- Is Admin: {isAdmin}");
-                        _ltasLogger.LogInformation($"- Has Okta: {hasOkta}");
-                        _ltasLogger.LogInformation($"- Has OktaAdmin: {hasOktaAdmin}");
-                        _ltasLogger.LogInformation($"- Has multiple providers: {result.HasMultipleProviders}");
-                        _ltasLogger.LogInformation($"- Has no valid provider: {result.HasNoValidProvider}");
-                        _ltasLogger.LogInformation($"- Is valid: {result.IsValid}");
-
                         // Only add to results if there are issues
                         if (!result.IsValid)
                         {
@@ -307,6 +283,7 @@ namespace LTAS_User_Management.Handlers
                     _ltasHelper.Logger.LogError(ex, $"Failed to check login profile for user: {user.ArtifactId}");
                 }
             }
+
             _ltasLogger.LogInformation($"Found {results?.Count ?? 0} quinn users with login method issues");
 
             if (results?.Count > 0)
@@ -318,20 +295,17 @@ namespace LTAS_User_Management.Handlers
                     emailbody,
                     "Quinn Users With Invalid Login Method");
             }
+
             return results;
         }
 
-        
         public async Task<List<PasswordAuthValidation>> ValidatePasswordAndTwoFactorAsync(List<Users> users)
         {
             var results = new List<PasswordAuthValidation>();
-
             foreach (var user in users)
             {
                 try
                 {
-                    //_ltasLogger.LogInformation($"Checking password auth and 2FA for user: {user.ArtifactId} ({user.EmailAddress})");
-
                     var result = new PasswordAuthValidation
                     {
                         UserArtifactId = user.ArtifactId,
@@ -345,30 +319,15 @@ namespace LTAS_User_Management.Handlers
                     {
                         var profile = await loginProfileManager.GetLoginProfileAsync(user.ArtifactId);
 
-                        // Check if user is using password authentication
                         result.IsUsingPasswordAuth = profile.Password != null && profile.Password.IsEnabled;
-
                         if (result.IsUsingPasswordAuth)
                         {
-                            //_ltasLogger.LogInformation($"User {user.ArtifactId} has password authentication enabled");
-
-                            // Check if 2FA is enabled by verifying TwoFactorProtocol has a value
                             result.Has2FAEnabled = profile.Password.TwoFactorProtocol.HasValue.Equals(true);
-
                             if (!result.Has2FAEnabled)
                             {
-                               // _ltasLogger.LogInformation($"User {user.ArtifactId} does not have 2FA enabled");
                                 result.ValidationMessage = "User has password authentication enabled but 2FA is not configured";
                                 results.Add(result);
                             }
-                            else
-                            {
-                                //_ltasLogger.LogInformation($"User {user.ArtifactId} has 2FA enabled ({profile.Password.TwoFactorProtocol})");
-                            }
-                        }
-                        else
-                        {
-                            //_ltasLogger.LogInformation($"User {user.ArtifactId} is not using password authentication");
                         }
                     }
                 }
@@ -377,7 +336,6 @@ namespace LTAS_User_Management.Handlers
                     _ltasLogger.LogError(ex, $"Failed to check password auth and 2FA for user: {user.ArtifactId}");
                     _ltasHelper.Logger.LogError(ex, $"Failed to check password auth and 2FA for user: {user.ArtifactId}");
 
-                    // Create validation result for errored user
                     results.Add(new PasswordAuthValidation
                     {
                         UserArtifactId = user.ArtifactId,
@@ -389,10 +347,7 @@ namespace LTAS_User_Management.Handlers
                 }
             }
 
-            // Log summary
-            _ltasLogger.LogInformation($"Completed password and 2FA validation for {users.Count} users");
             _ltasLogger.LogInformation($"Found {results.Count} users with password auth enabled but no 2FA");
-
             return results;
         }
 
@@ -400,28 +355,27 @@ namespace LTAS_User_Management.Handlers
         {
             var singleSettingValueEnvironment = instanceSettingsBundle.GetStringAsync("Relativity.Core", "RelativityInstanceURL");
             string environmentValue = singleSettingValueEnvironment.Result.Split('-')[1].Split('.')[0].ToUpper();
-            
+
             var results = new List<UserClientValidation>();
             int targetClientId = 0;
-            //finds the environment that the user is in and their client ID
+
             switch (environmentValue)
             {
                 case ("US"):
-                    targetClientId = 1348948;                    
+                    targetClientId = 1348948;
                     break;
-
                 case ("EU"):
                     targetClientId = 1067216;
                     break;
-
                 case ("AU"):
                     targetClientId = 1304327;
                     break;
             }
-                foreach (var user in users)
+
+            foreach (var user in users)
             {
                 try
-                {                   
+                {
                     var result = new UserClientValidation
                     {
                         UserArtifactId = user.ArtifactId,
@@ -434,14 +388,12 @@ namespace LTAS_User_Management.Handlers
                         try
                         {
                             var response = await userManager.ReadAsync(user.ArtifactId);
-
                             if (response.Client?.Value != null && !response.Client.Secured)
                             {
                                 int currentClientId = response.Client.Value.ArtifactID;
-                                // Only add users with the target client ID
                                 if (currentClientId != targetClientId)
                                 {
-                                    results.Add(result);                                    
+                                    results.Add(result);
                                 }
                             }
                         }
@@ -459,16 +411,15 @@ namespace LTAS_User_Management.Handlers
             }
 
             _ltasLogger.LogInformation($"Found {results.Count} users to update to client ID {targetClientId}");
-
             return results;
         }
 
         public async Task UpdateUsersToNewClientAsync(List<UserClientValidation> users)
         {
             try
-            {               
+            {
                 foreach (var user in users)
-                {                   
+                {
                     try
                     {
                         var servicesManager = _helper.GetServicesManager();
@@ -479,11 +430,10 @@ namespace LTAS_User_Management.Handlers
                             {
                                 Client = new Securable<ObjectIdentifier>
                                 {
-                                    Value = new ObjectIdentifier { ArtifactID = user.ClientArtifactId},
+                                    Value = new ObjectIdentifier { ArtifactID = user.ClientArtifactId },
                                     Secured = false
                                 }
                             };
-
                             await userManager.UpdateAsync(user.UserArtifactId, userRequest);
                             _ltasLogger.LogInformation($"Successfully updated client for user: {user.UserArtifactId} ({userResponse.EmailAddress}) to {user.ClientArtifactId}");
                         }
@@ -502,6 +452,56 @@ namespace LTAS_User_Management.Handlers
                 _ltasHelper.Logger.LogError(ex, "Failed to process client updates");
                 throw;
             }
+        }
+
+        public async Task<List<int>> UpdateAdminGroupUsersAsync(List<Users> users)
+        {
+            var updatedUserIds = new List<int>();
+
+            _ltasLogger.LogInformation($"Starting admin group user update process for {users.Count} users");
+
+            foreach (var user in users)
+            {
+                try
+                {
+                    var userGroups = await RetrieveGroupsForUser(user.ArtifactId);
+
+                    if (userGroups?.Objects != null)
+                    {
+                        bool isAdminUser = false;
+
+                        foreach (var group in userGroups.Objects)
+                        {
+                            string groupName = group.Values?.Count > 1 ? group.Values[1]?.ToString() : null;
+
+                            if (groupName != null &&
+                                (groupName.Equals("System Administrators", StringComparison.OrdinalIgnoreCase) ||
+                                 groupName.Equals("QE_LTAS_ADMIN", StringComparison.OrdinalIgnoreCase)))
+                            {
+                                isAdminUser = true;
+                                break;
+                            }
+                        }
+
+                        if (isAdminUser)
+                        {
+                            bool wasUpdated = await AdminUpdateAsync(user.ArtifactId);
+                            if (wasUpdated)
+                            {
+                                updatedUserIds.Add(user.ArtifactId);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _ltasLogger.LogError(ex, $"Failed to process admin update for user: {user.ArtifactId}");
+                    _ltasHelper.Logger.LogError(ex, $"Failed to process admin update for user: {user.ArtifactId}");
+                }
+            }
+
+            _ltasLogger.LogInformation($"Completed admin group user update. Updated {updatedUserIds.Count} users");
+            return updatedUserIds;
         }
     }
 }

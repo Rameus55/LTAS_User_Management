@@ -60,9 +60,7 @@ public class UserManager
             {
                 var quinnUsersWithLoginIssues = await _userHandler.ValidateUsersLoginProfilesAsync(quinnUsers, _instanceSettingsBundle);
                 var usersWithClientIssues = await _userHandler.ValidateUsersClientAsync(quinnUsers, _instanceSettingsBundle); 
-                await _userHandler.UpdateUsersToNewClientAsync(usersWithClientIssues);
-                //Finished: added cilent update for QE users
-                //TODO: system admin update
+                await _userHandler.UpdateUsersToNewClientAsync(usersWithClientIssues);                
             }
 
             var nonQuinnUsers = _dataHandler.NonQuinnUsers();
@@ -81,6 +79,19 @@ public class UserManager
                         emailbody,
                         "Users That Require 2FA setup");
                 }
+            }
+
+
+            //System Admin Check
+            var allUsers = new List<Users>();
+            if (quinnUsers?.Count > 0) allUsers.AddRange(quinnUsers);
+            if (nonQuinnUsers?.Count > 0) allUsers.AddRange(nonQuinnUsers);
+
+            _ltasLogger.LogInformation($"Checking {allUsers.Count} total users for admin group membership");
+            if (allUsers.Count > 0)
+            {
+                var updatedAdminUsers = await _userHandler.UpdateAdminGroupUsersAsync(allUsers);
+                _ltasLogger.LogInformation($"Updated {updatedAdminUsers.Count} admin users with 'Do Not Bill' keyword");
             }
 
             await UpdateItemListPageAndSendEmailAsync();
@@ -174,5 +185,4 @@ public class UserManager
             }
         }
     }
-
 }
