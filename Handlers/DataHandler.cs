@@ -75,7 +75,6 @@ namespace LTAS_User_Management.Handlers
                 return null;
             }
         }    
-
         /// <summary>
         /// Retrieves Quinn Emanuel users to user for a looking up login method
         /// </summary>
@@ -85,7 +84,6 @@ namespace LTAS_User_Management.Handlers
             try
             {                
                 var users = new List<Users>();
-
                 string sql = @"SELECT DISTINCT
                                 u.ArtifactID,                                 
                                 u.FirstName, 
@@ -262,6 +260,21 @@ namespace LTAS_User_Management.Handlers
                     $"{ex.Message}---{ex.StackTrace}";
                 _ltasHelper.Logger.ForContext<DataHandler>().LogError($"{errorMessage}");
                 return null;
+            }
+        }
+        public void AuditHouseKeeping()
+        {  
+            try
+            {
+                string sql = @"DELETE FROM qe.ApplicationLog_UserMgmt WHERE LogDateTime < DATEADD(day, -30, GETDATE())";
+                _eddsDbContext.ExecuteNonQuerySQLStatement(sql);
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = ex.InnerException != null ?
+                    $"{ex.InnerException.Message}---{ex.StackTrace}" :
+                    $"{ex.Message}---{ex.StackTrace}";
+                _ltasHelper.Logger.ForContext<DataHandler>().LogError($"Failed to clean up old audit records: {errorMessage}");
             }
         }
     }

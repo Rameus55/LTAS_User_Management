@@ -95,7 +95,7 @@ public class UserManager
             }
 
             await UpdateItemListPageAndSendEmailAsync();
-
+            _dataHandler.AuditHouseKeeping();
             _ltasLogger.LogInformation("User management routines completed");            
         }
         catch (Exception ex)
